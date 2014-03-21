@@ -23,13 +23,6 @@ type handlerError struct {
 	Message string
 	Code    int
 }
-/*
-// stress_test_run model
-type stress_test_run struct {
-	Time     string  `json:"time"`
-	Duration float64 `json:"duration"`
-	Id       int     `json:"id"`
-}*/
 
 // stress_test model
 type stress_test struct {
@@ -182,36 +175,46 @@ func runStressTest(w http.ResponseWriter, r *http.Request) (interface{}, *handle
 	id, _ := strconv.Atoi(param)
 	st, index := getStressTestById(id)
 	log.Println(st.Parallel)
+	//runtime.GOMAXPROCS(st.Parallel)
 
+	//done := make(chan bool)
 	t1 := time.Now()
-	db, err := sql.Open("odbc", "DSN=verticaTest;")
-	defer db.Close()
-	if err != nil {
-		log.Println(err)
+	for i := 0; i < st.Parallel; i++ {
+		//go func() {
+			db, err := sql.Open("odbc", "DSN=verticaTest;")
+			defer db.Close()
+			if err != nil {
+				log.Println(err)
+			}
+
+			stmt, err :=	db.Prepare("select * from test_table")
+			defer stmt.Close()
+			if err != nil {
+				log.Println(err)
+			}
+
+			rows, err :=	stmt.Query()
+			checkErr(err)
+			printTable(rows)
+			//done <- true
+		//}()
 	}
 
+	//for j := 0; j < st.Parallel; j++ {
+	//	<-done
+	//}
 
-   	stmt, err :=	db.Prepare("select * from test_table")
-   	defer stmt.Close()
-   	if err != nil {
-		log.Println(err)
-	}
-
-   	rows, err :=	stmt.Query()
-   	checkErr(err)
 	t2 := time.Now()
-   	dur := t2.Sub(t1)
-   	printTable(rows)
-
+	dur := t2.Sub(t1)
 	const layout = "Jan 2, 2006 at 3:04:01pm (EST)"
 	st.Run = t1.Format(layout)
 	st.Duration = dur.Seconds()
 	stress_tests[index] = st
-	return st, nil
+	return st,nil
 }
 
 func printTable(rows *sql.Rows) { 
-
+/*
     pr := func(t interface{}) (r string) { 
             r = "\\N" 
             switch v := t.(type) { 
@@ -280,7 +283,7 @@ func printTable(rows *sql.Rows) {
             fmt.Println() 
         } 
         fmt.Println() 
-} 
+*/} 
 
 func checkErr(err error) { 
     if err != nil { 
@@ -318,9 +321,9 @@ func main() {
 
 	// bootstrap some data
 	stress_tests = append(stress_tests, stress_test{"Single Fetch", 1, getNextId(), "", 0})
-	stress_tests = append(stress_tests, stress_test{"Five in Parallel", 5, getNextId(), "", 0})
-	stress_tests = append(stress_tests, stress_test{"25 in Parallel", 25, getNextId(), "", 0})
-	stress_tests = append(stress_tests, stress_test{"125 in Parallel", 125, getNextId(), "", 0})
+	stress_tests = append(stress_tests, stress_test{"Twenty-Five in Parallel", 25, getNextId(), "", 0})
+	stress_tests = append(stress_tests, stress_test{"Fifty in Parallel", 50, getNextId(), "", 0})
+	stress_tests = append(stress_tests, stress_test{"Seventy-Five in Parallel", 75, getNextId(), "", 0})
 
 	log.Printf("Running on port %d\n", *port)
 
