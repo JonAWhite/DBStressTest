@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en" ng-app="myapp">
+<head>
+	<meta charset="UTF-8">
+	<title>My Stress Tests</title>
+	<link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css">
+	<link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootswatch/3.1.0/cyborg/bootstrap.min.css">
+	<link rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.min.css">
+</head>
+<!-- putting this at the top to remove the jarring load -->
+<script src="http://code.angularjs.org/1.2.10/angular.min.js"></script>
+<body ng-controller="MainCtl">
+	<div class="jumbotron">
+		<button class="btn btn-primary pull-right" ng-click="add()">
+			<i class="fa fa-plus"></i> Add stress test
+		</button>
+		<h1>My Stress Tests</h1>
+	</div>
+	<div class="container-fluid">
+		<div class="row">
+			<div class="col-sm-3 well">
+				<h3>Stress Tests</h3>
+				<ul class="nav nav-pills nav-stacked">
+					<li ng-class="{active: s.name == selected.name}" ng-repeat="s in stressTests">
+						<a href="" ng-click="get($index)">{{s.name}}</a>
+					</li>
+				</ul>
+			</div>
+			<div class="col-sm-6" ng-show="selected">
+				<h2>{{selected.name}}</h2>
+				<dl class="dl-horizontal">
+					<dt>Parallel:</dt>
+					<dd>{{selected.parallel}}</dd>
+					<dt>Time:</dt>
+					<dd>{{selected.run}}</dd>
+					<dt>Duration:</dt>
+					<dd>{{selected.duration}}</dd>
+				</dl>
+			</div>
+			<div class="col-sm-3" ng-show="selected">
+				<button class="btn btn-success form-control" ng-click="run(selected.idx)">
+					<i class="fa fa-cogs"></i> Run this stress test
+				</button>
+				<button class="btn btn-primary form-control" ng-click="update(selected.idx)">
+					<i class="fa fa-pencil"></i> Update this stress test
+				<button class="btn btn-danger form-control" ng-click="remove(selected.idx)">
+					<i class="fa fa-trash-o"></i> Remove this stress test
+				</button>
+			</div>
+		</div>
+	</div>
+<script src="http://code.angularjs.org/1.2.10/angular-resource.min.js"></script>
+<script>
+	// new dependency: ngResource is included just above
+	var myapp = new angular.module("myapp", ["ngResource"]);
+
+	// inject the $resource dependency here
+	myapp.controller("MainCtl", ["$scope", "$resource", function($scope, $resource){
+		// I designed the backend to play nicely with angularjs so this is all the
+		// setup we need to do all of the ususal operations.
+		var StressTest = $resource("/stress_tests/:id", {id: '@id'}, {});
+		var StressTestRunner = $resource("/stress_tests/:id/run", {id: '@id'}, {});
+
+		$scope.selected = null;
+
+		$scope.list = function(idx){
+			// Notice calls to StressTest are often given callbacks.
+			StressTest.query(function(data){
+				$scope.stressTests = data;
+				if(idx != undefined) {
+					$scope.selected = $scope.stressTests[idx];
+					$scope.selected.idx = idx;
+				}
+			}, function(error){
+				alert(error.data);
+			});
+		};
+
+		$scope.list();
+
+		$scope.get = function(idx){
+			// Passing parameters to StressTest calls will become arguments if
+			// we haven't defined it as part of the path (we did with id)
+			StressTest.get({id: $scope.stressTests[idx].id}, function(data){
+				$scope.selected = data;
+				$scope.selected.idx = idx;
+			});
+		};
+
+		$scope.add = function() {
+			// I was lazy with the user input.
+			var name = prompt("Enter the stress test's Name.");
+			if(name == null){
+				return;
+			}
+			var parallel = prompt("Enter the number of times to run test in parallel.");
+			if(parallel == null){
+				return;
+			}
+			// Creating a blank StressTest object means you can still $save
+			var newStressTest = new StressTest();
+			newStressTest.name = name;
+			newStressTest.parallel = parallel;
+			newStressTest.run = "";
+			newStressTest.duration = 0;
+			newStressTest.$save();
+
+			$scope.list();
+		};
+
+		$scope.update = function(idx) {
+			var stressTest = $scope.stressTests[idx];
+			var name = prompt("Enter a new name.", stressTest.name);
+			if(name == null) {
+				return;
+			}
+			var parallel = prompt("Enter a new number of times to run the test in parallel", stressTest.parallel);
+			if(parallel == null) {
+				return;
+			}
+			stressTest.name = name;
+			stressTest.parallel = parallel;
+			newStressTest.run = "";
+			newStressTest.duration = 0;
+			// Noticed I never created a new StressTest()?
+			stressTest.$save();
+
+			$scope.list(idx);
+		};
+
+		$scope.updateAll = function(idx, payLoad) {
+			var stressTest = $scope.stressTests[idx];
+			stressTest.name = payLoad.name;
+			stressTest.parallel = payLoad.parallel;
+			stressTest.id = payLoad.id;
+			stressTest.run = payLoad.run;
+			stressTest.duration = payLoad.duration;
+
+			// Noticed I never created a new StressTest()?
+			stressTest.$save();
+
+			$scope.list(idx);
+		};
+
+		$scope.run = function(idx){
+			// Passing parameters to StressTest calls will become arguments if
+			// we haven't defined it as part of the path (we did with id)
+			StressTestRunner.save({id: $scope.stressTests[idx].id}, function(data){
+				$scope.updateAll(idx, data);		
+			});
+		};
+
+		$scope.view = function(idx){
+		};
+
+		$scope.remove = function(idx){
+			$scope.stressTests[idx].$delete();
+			$scope.selected = null;
+			$scope.list();
+		};
+	}]);
+</script>
+</body>
+</html>

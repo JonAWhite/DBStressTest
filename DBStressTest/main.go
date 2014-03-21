@@ -8,6 +8,11 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"database/sql"
+	_ "odbc/driver"
+	"time"
+	"runtime"
+	"os"
 
 	"github.com/gorilla/mux"
 )
@@ -18,16 +23,25 @@ type handlerError struct {
 	Message string
 	Code    int
 }
+/*
+// stress_test_run model
+type stress_test_run struct {
+	Time     string  `json:"time"`
+	Duration float64 `json:"duration"`
+	Id       int     `json:"id"`
+}*/
 
-// book model
-type book struct {
-	Title  string `json:"title"`
-	Author string `json:"author"`
-	Id     int    `json:"id"`
+// stress_test model
+type stress_test struct {
+	Name   	  string  `json:"name"`
+	Parallel  int     `json:"parallel"`
+	Id        int     `json:"id"`
+	Run       string  `json:"run"`
+	Duration  float64 `json:"duration"`
 }
 
-// list of all of the books
-var books = make([]book, 0)
+// list of all of the stress tests
+var stress_tests = make([]stress_test, 0)
 
 // a custom type that we can use for handling errors and formatting responses
 type handler func(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError)
@@ -64,94 +78,94 @@ func (fn handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s %s %d", r.RemoteAddr, r.Method, r.URL, 200)
 }
 
-func listBooks(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
-	return books, nil
+func listStressTests(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
+	return stress_tests, nil
 }
 
-func getBook(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
+func getStressTest(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
 	// mux.Vars grabs variables from the path
 	param := mux.Vars(r)["id"]
 	id, e := strconv.Atoi(param)
 	if e != nil {
 		return nil, &handlerError{e, "Id should be an integer", http.StatusBadRequest}
 	}
-	b, index := getBookById(id)
+	b, index := getStressTestById(id)
 
 	if index < 0 {
-		return nil, &handlerError{nil, "Could not find book " + param, http.StatusNotFound}
+		return nil, &handlerError{nil, "Could not find stress test " + param, http.StatusNotFound}
 	}
 
 	return b, nil
 }
 
-func parseBookRequest(r *http.Request) (book, *handlerError) {
-	// the book payload is in the request body
+func parseStressTestRequest(r *http.Request) (stress_test, *handlerError) {
+	// the stress_test payload is in the request body
 	data, e := ioutil.ReadAll(r.Body)
 	if e != nil {
-		return book{}, &handlerError{e, "Could not read request", http.StatusBadRequest}
+		return stress_test{}, &handlerError{e, "Could not read request", http.StatusBadRequest}
 	}
 
-	// turn the request body (JSON) into a book object
-	var payload book
+	// turn the request body (JSON) into a stress_test object
+	var payload stress_test
 	e = json.Unmarshal(data, &payload)
 	if e != nil {
-		return book{}, &handlerError{e, "Could not parse JSON", http.StatusBadRequest}
+		return stress_test{}, &handlerError{e, "Could not parse JSON", http.StatusBadRequest}
 	}
 
 	return payload, nil
 }
 
-func addBook(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
-	payload, e := parseBookRequest(r)
+func addStressTest(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
+	payload, e := parseStressTestRequest(r)
 	if e != nil {
 		return nil, e
 	}
 
 	// it's our job to assign IDs, ignore what (if anything) the client sent
 	payload.Id = getNextId()
-	books = append(books, payload)
+	stress_tests = append(stress_tests, payload)
 
-	// we return the book we just made so the client can see the ID if they want
+	// we return the stress_test we just made so the client can see the ID if they want
 	return payload, nil
 }
 
-func updateBook(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
-	payload, e := parseBookRequest(r)
+func updateStressTest(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
+	payload, e := parseStressTestRequest(r)
 	if e != nil {
 		return nil, e
 	}
 
-	_, index := getBookById(payload.Id)
-	books[index] = payload
+	_, index := getStressTestById(payload.Id)
+	stress_tests[index] = payload
 	return make(map[string]string), nil
 }
 
-func removeBook(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
+func removeStressTest(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
 	param := mux.Vars(r)["id"]
 	id, e := strconv.Atoi(param)
 	if e != nil {
 		return nil, &handlerError{e, "Id should be an integer", http.StatusBadRequest}
 	}
-	// this is jsut to check to see if the book exists
-	_, index := getBookById(id)
+	// this is jsut to check to see if the stress_test exists
+	_, index := getStressTestById(id)
 
 	if index < 0 {
 		return nil, &handlerError{nil, "Could not find entry " + param, http.StatusNotFound}
 	}
 
-	// remove a book from the list
-	books = append(books[:index], books[index+1:]...)
+	// remove a stress_test from the list
+	stress_tests = append(stress_tests[:index], stress_tests[index+1:]...)
 	return make(map[string]string), nil
 }
 
-// searches the books for the book with `id` and returns the book and it's index, or -1 for 404
-func getBookById(id int) (book, int) {
-	for i, b := range books {
-		if b.Id == id {
-			return b, i
+// searches the stress_tests for the stress_test with `id` and returns the stress_test and it's index, or -1 for 404
+func getStressTestById(id int) (stress_test, int) {
+	for i, s := range stress_tests {
+		if s.Id == id {
+			return s, i
 		}
 	}
-	return book{}, -1
+	return stress_test{}, -1
 }
 
 var id = 0
@@ -161,6 +175,124 @@ func getNextId() int {
 	id += 1
 	return id
 }
+
+func runStressTest(w http.ResponseWriter, r *http.Request) (interface{}, *handlerError) {
+	// mux.Vars grabs variables from the path
+	param := mux.Vars(r)["id"]
+	id, _ := strconv.Atoi(param)
+	st, index := getStressTestById(id)
+	log.Println(st.Parallel)
+
+	t1 := time.Now()
+	db, err := sql.Open("odbc", "DSN=verticaTest;")
+	defer db.Close()
+	if err != nil {
+		log.Println(err)
+	}
+
+
+   	stmt, err :=	db.Prepare("select * from test_table")
+   	defer stmt.Close()
+   	if err != nil {
+		log.Println(err)
+	}
+
+   	rows, err :=	stmt.Query()
+   	checkErr(err)
+	t2 := time.Now()
+   	dur := t2.Sub(t1)
+   	printTable(rows)
+
+	const layout = "Jan 2, 2006 at 3:04:01pm (EST)"
+	st.Run = t1.Format(layout)
+	st.Duration = dur.Seconds()
+	stress_tests[index] = st
+	return st, nil
+}
+
+func printTable(rows *sql.Rows) { 
+
+    pr := func(t interface{}) (r string) { 
+            r = "\\N" 
+            switch v := t.(type) { 
+            case *sql.NullBool: 
+                if v.Valid { 
+                    r = fmt.Sprintf("%v", v.Bool) 
+                } 
+            case *sql.NullString: 
+                if v.Valid { 
+                    r = v.String 
+                } 
+            case *sql.NullInt64: 
+                if v.Valid { 
+                    r = fmt.Sprintf("%6d", v.Int64) 
+                } 
+            case *sql.NullFloat64: 
+                if v.Valid { 
+                    r = fmt.Sprintf("%.2f", v.Float64) 
+                } 
+            case *time.Time: 
+                if v.Year() > 1900 { 
+                    r = v.Format("_2 Jan 2006") 
+                } 
+            default: 
+                r = fmt.Sprintf("%#v", t) 
+            } 
+            return 
+        } 
+
+        c, _ := rows.Columns() 
+        n := len(c) 
+
+        // print labels 
+        for i := 0; i < n; i++ { 
+            if len(c[i]) > 1 && c[i][1] == ':' { 
+                fmt.Print(c[i][2:], "\t") 
+            } else { 
+                fmt.Print(c[i], "\t") 
+            } 
+        } 
+        fmt.Print("\n\n") 
+
+        // print data 
+        var field []interface{} 
+        for i := 0; i < n; i++ { 
+            switch { 
+            case c[i][:2] == "b:": 
+                field = append(field, new(sql.NullBool)) 
+            case c[i][:2] == "f:": 
+                field = append(field, new(sql.NullFloat64)) 
+            case c[i][:2] == "i:": 
+                field = append(field, new(sql.NullInt64)) 
+            case c[i][:2] == "s:": 
+                field = append(field, new(sql.NullString)) 
+            case c[i][:2] == "t:": 
+                field = append(field, new(time.Time)) 
+            default: 
+                field = append(field, new(sql.NullString)) 
+            } 
+        } 
+        for rows.Next() { 
+            checkErr(rows.Scan(field...)) 
+            for i := 0; i < n; i++ { 
+                fmt.Print(pr(field[i]), "\t") 
+            } 
+            fmt.Println() 
+        } 
+        fmt.Println() 
+} 
+
+func checkErr(err error) { 
+    if err != nil { 
+        _, filename, lineno, ok := runtime.Caller(1) 
+        if ok { 
+            fmt.Fprintf(os.Stderr, "%v:%v: %v\n", filename, 
+lineno, err) 
+        } 
+        panic(err) 
+    } 
+} 
+
 
 func main() {
 	// command line flags
@@ -175,19 +307,20 @@ func main() {
 	// setup routes
 	router := mux.NewRouter()
 	router.Handle("/", http.RedirectHandler("/static/", 302))
-	router.Handle("/books", handler(listBooks)).Methods("GET")
-	router.Handle("/books", handler(addBook)).Methods("POST")
-	router.Handle("/books/{id}", handler(getBook)).Methods("GET")
-	router.Handle("/books/{id}", handler(updateBook)).Methods("POST")
-	router.Handle("/books/{id}", handler(removeBook)).Methods("DELETE")
+	router.Handle("/stress_tests", handler(listStressTests)).Methods("GET")
+	router.Handle("/stress_tests", handler(addStressTest)).Methods("POST")
+	router.Handle("/stress_tests/{id}", handler(getStressTest)).Methods("GET")
+	router.Handle("/stress_tests/{id}", handler(updateStressTest)).Methods("POST")
+	router.Handle("/stress_tests/{id}", handler(removeStressTest)).Methods("DELETE")
+	router.Handle("/stress_tests/{id}/run", handler(runStressTest)).Methods("POST")
 	router.PathPrefix("/static/").Handler(http.StripPrefix("/static", fileHandler))
 	http.Handle("/", router)
 
 	// bootstrap some data
-	books = append(books, book{"Ender's Game", "Orson Scott Card", getNextId()})
-	books = append(books, book{"Code Complete", "Steve McConnell", getNextId()})
-	books = append(books, book{"World War Z", "Max Brooks", getNextId()})
-	books = append(books, book{"Pragmatic Programmer", "David Thomas", getNextId()})
+	stress_tests = append(stress_tests, stress_test{"Single Fetch", 1, getNextId(), "", 0})
+	stress_tests = append(stress_tests, stress_test{"Five in Parallel", 5, getNextId(), "", 0})
+	stress_tests = append(stress_tests, stress_test{"25 in Parallel", 25, getNextId(), "", 0})
+	stress_tests = append(stress_tests, stress_test{"125 in Parallel", 125, getNextId(), "", 0})
 
 	log.Printf("Running on port %d\n", *port)
 
